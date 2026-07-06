@@ -84,6 +84,18 @@ pkgs.testers.nixosTest {
         "engine banner not found in output: " + out
     )
 
+    import json
+    profile = json.loads(
+        machine.succeed("nerdctl exec game cat /etc/instant-play/profile.json")
+    )
+    assert len(profile) > 50, "profile has too few ranges: %d" % len(profile)
+    assert any("data.pk3" in r["path"] for r in profile), "profile missing menu assets"
+    # block-level: only the touched slivers of maps.pk3, never the whole 626MB
+    maps_bytes = sum(r["length"] for r in profile if r["path"].endswith("maps.pk3"))
+    assert maps_bytes < 50_000_000, "profile over-prefetches maps.pk3: %d" % maps_bytes
+
+    machine.succeed("nerdctl exec game test -x /bin/instant-play-entrypoint")
+
     machine.succeed("nerdctl rm -f game")
   '';
 }

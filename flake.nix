@@ -27,11 +27,30 @@
           treefmt = treefmt-nix.lib.evalModule pkgs {
             projectRootFile = "flake.nix";
             programs.nixpkgs-fmt.enable = true;
+            programs.rustfmt.enable = true;
           };
         in
         {
           packages = {
-            xonotic-image = pkgs.callPackage ./nix/image.nix { };
+            recorder = pkgs.callPackage ./nix/recorder.nix { };
+            xonotic-profiler = pkgs.callPackage ./nix/profile.nix {
+              recorder = self.packages.${system}.recorder;
+              app = pkgs.xonotic;
+              pname = "xonotic";
+              command = [
+                "${pkgs.xonotic}/bin/xonotic-sdl"
+                "-nosound"
+                "+vid_width"
+                "320"
+                "+vid_height"
+                "240"
+                "+host_maxfps"
+                "15"
+              ];
+            };
+            xonotic-image = pkgs.callPackage ./nix/image.nix {
+              profile = ./profiles/xonotic.json;
+            };
             publish = pkgs.callPackage ./nix/publish.nix {
               image = self.packages.${system}.xonotic-image;
               nerdctl = nerdctl-flake.packages.${system}.nerdctl;
@@ -42,6 +61,11 @@
           apps.publish = {
             type = "app";
             program = "${self.packages.${system}.publish}/bin/instant-play-publish";
+          };
+
+          apps.profile-xonotic = {
+            type = "app";
+            program = "${self.packages.${system}.xonotic-profiler}/bin/instant-play-profile-xonotic";
           };
 
           formatter = treefmt.config.build.wrapper;
