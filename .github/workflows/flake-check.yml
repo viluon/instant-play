@@ -1,0 +1,50 @@
+name: check
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  flake:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: create nix mount point
+        run: sudo mkdir /nix
+
+      # the integration test builds and pushes a ~1.2GB image; the default runner disk is too small
+      - name: maximize build space
+        uses: easimon/maximize-build-space@v10
+        with:
+          build-mount-path: /nix
+          overprovision-lvm: true
+          remove-android: true
+          remove-codeql: true
+          remove-docker-images: true
+          remove-dotnet: true
+          remove-haskell: true
+          root-reserve-mb: 512
+          swap-size-mb: 1024
+
+      - name: checkout
+        uses: actions/checkout@v7
+
+      - name: install nix
+        uses: DeterminateSystems/nix-installer-action@main
+
+      - name: setup magic nix cache
+        uses: DeterminateSystems/magic-nix-cache-action@main
+
+      # the nixosTest driver needs KVM
+      - name: enable kvm
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: check
+        run: nix flake check --log-format raw --print-build-logs

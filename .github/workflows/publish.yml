@@ -1,0 +1,50 @@
+name: publish
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - name: create nix mount point
+        run: sudo mkdir /nix
+
+      - name: maximize build space
+        uses: easimon/maximize-build-space@v10
+        with:
+          build-mount-path: /nix
+          overprovision-lvm: true
+          remove-android: true
+          remove-codeql: true
+          remove-docker-images: true
+          remove-dotnet: true
+          remove-haskell: true
+          root-reserve-mb: 512
+          swap-size-mb: 1024
+
+      - name: checkout
+        uses: actions/checkout@v7
+
+      - name: install nix
+        uses: DeterminateSystems/nix-installer-action@main
+
+      - name: setup magic nix cache
+        uses: DeterminateSystems/magic-nix-cache-action@main
+
+      - name: log in to ghcr and push
+        env:
+          DOCKER_CONFIG: ${{ runner.temp }}/docker
+        run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          mkdir -p "$DOCKER_CONFIG"
+          auth="$(printf '%s:%s' '${{ github.actor }}' '${{ github.token }}' | base64 -w0)"
+          printf '{"auths":{"ghcr.io":{"auth":"%s"}}}' "$auth" > "$DOCKER_CONFIG/config.json"
+          sudo -E "$(command -v nix)" run .#publish -- "ghcr.io/$owner/instant-play:xonotic"

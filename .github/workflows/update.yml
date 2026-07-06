@@ -1,0 +1,36 @@
+name: Update lock file
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+jobs:
+  update:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: install nix
+        uses: DeterminateSystems/nix-installer-action@main
+
+      - name: update
+        run: nix flake update
+
+      - name: open pull request
+        uses: peter-evans/create-pull-request@v8.1.1
+        with:
+          add-paths: flake.lock
+          branch: feature/update-flake
+          commit-message: "chore: update flake.lock"
+          delete-branch: true
+          title: "Update ❄️ flake"
+          body: |
+            Automated `nix flake update`.
+          token: ${{ github.token }}
